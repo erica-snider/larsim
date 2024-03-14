@@ -56,7 +56,8 @@ namespace detsim {
   //----------------------------------------------------------------------------
   // fNumIonElectrons returns a value that is not corrected for life time effects
   double ISCalculationSeparate::CalculateIonization(detinfo::DetectorPropertiesData const& detProp,
-                                                    sim::SimEnergyDeposit const& edep) const
+                                                    sim::SimEnergyDeposit const& edep,
+                                                    geo::TPCID const& tpcid) const
   {
     float e = edep.Energy();
     float ds = edep.StepLength();
@@ -65,7 +66,7 @@ namespace detsim {
     float z = edep.MidPointZ();
     double recomb = 0.;
     double dEdx = (ds <= 0.0) ? 0.0 : e / ds;
-    double EFieldStep = EFieldAtStep(detProp.Efield(), x, y, z);
+    double EFieldStep = EFieldAtStep(detProp, x, y, z, tpcid);
 
     // Guard against spurious values of dE/dx. Note: assumes density of LAr
     if (dEdx < 1.) dEdx = 1.;
@@ -93,7 +94,7 @@ namespace detsim {
   }
 
   //----------------------------------------------------------------------------
-  double ISCalculationSeparate::CalculateScintillation(sim::SimEnergyDeposit const& edep) const
+  double ISCalculationSeparate::CalculateScintillation(sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid) const
   {
     float const e = edep.Energy();
     int const pdg = edep.PdgCode();
@@ -126,26 +127,28 @@ namespace detsim {
   //----------------------------------------------------------------------------
   ISCalculationSeparate::Data ISCalculationSeparate::CalculateIonizationAndScintillation(
     detinfo::DetectorPropertiesData const& detProp,
-    sim::SimEnergyDeposit const& edep) const
+    sim::SimEnergyDeposit const& edep,
+    geo::TPCID const& tpcid) const
   {
-    return {edep.Energy(), CalculateIonization(detProp, edep), CalculateScintillation(edep)};
+    return {edep.Energy(), CalculateIonization(detProp, edep, tpcid), CalculateScintillation(edep, tpcid)};
   }
 
-  double ISCalculationSeparate::EFieldAtStep(double const efield,
-                                             sim::SimEnergyDeposit const& edep) const
+  double ISCalculationSeparate::EFieldAtStep(detinfo::DetectorPropertiesData const& detProp,
+                                             sim::SimEnergyDeposit const& edep,
+                                             geo::TPCID const& tpcid) const
   {
-    return EFieldAtStep(efield, edep.MidPointX(), edep.MidPointY(), edep.MidPointZ());
+    return EFieldAtStep(detProp, edep.MidPointX(), edep.MidPointY(), edep.MidPointZ(), tpcid);
   }
 
-  double ISCalculationSeparate::EFieldAtStep(double const efield,
+  double ISCalculationSeparate::EFieldAtStep(detinfo::DetectorPropertiesData const& detProp,
                                              float const x,
                                              float const y,
-                                             float const z) const
+                                             float const z,
+                                             geo::TPCID const& tpcid ) const
   {
-    if (not fSCE->EnableSimEfieldSCE()) { return efield; }
+    if (not fSCE->EnableSimEfieldSCE()) { return detProp.Efield(); }
 
-    auto const offsets = fSCE->GetEfieldOffsets(geo::Point_t{x, y, z});
-    return std::hypot(efield + efield * offsets.X(), efield * offsets.Y(), efield * offsets.Z());
+    auto const offsets = fSCE->GetEfieldOffsets(geo::Point_t{x, y, z}, tpcid);
+    return detProp.Efield() * (detProp.NomEfieldDir(tpcid) + offsets).R(); 
   }
-
 } // namespace

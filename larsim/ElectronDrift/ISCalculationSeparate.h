@@ -20,6 +20,9 @@ namespace detinfo {
 namespace fhicl {
   class ParameterSet;
 }
+namespace geo {
+  class TPCID;
+}
 namespace sim {
   class SimEnergyDeposit;
   class LArG4Parameters;
@@ -40,8 +43,9 @@ namespace detsim {
       double numPhotons;
     };
     Data CalculateIonizationAndScintillation(detinfo::DetectorPropertiesData const& detProp,
-                                             sim::SimEnergyDeposit const& edep) const;
-    double EFieldAtStep(double efield, sim::SimEnergyDeposit const& edep)
+                                             sim::SimEnergyDeposit const& edep,
+                                             geo::TPCID const& tpcid) const;
+    double EFieldAtStep(double efield, sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid)
       const; //value of field with any corrections for this step
 
   private:
@@ -52,14 +56,20 @@ namespace detsim {
     bool fUseModBoxRecomb;
     double fGeVToElectrons; ///< from LArG4Parameters service
 
-    double EFieldAtStep(double efield, float x, float y, float z) const;
+    double EFieldAtStep(detinfo::DetectorPropertiesData const& detProp,
+                        sim::SimEnergyDeposit const& edep,
+                        geo::TPCID const& tpcid) const;
+    double EFieldAtStep(detinfo::DetectorPropertiesData const& detProp, 
+                        float x, float y, float z, geo::TPCID const& tpcid) const;
 
     const detinfo::LArProperties* fLArProp;
     const spacecharge::SpaceCharge* fSCE;
 
     double CalculateIonization(detinfo::DetectorPropertiesData const& detProp,
-                               sim::SimEnergyDeposit const& edep) const;
-    double CalculateScintillation(sim::SimEnergyDeposit const& edep) const;
+                               sim::SimEnergyDeposit const& edep, 
+                               geo::TPCID const& tpcid) const;
+    double CalculateScintillation(sim::SimEnergyDeposit const& edep, 
+                                  geo::TPCID const& tpcid) const;
   };
 }
 #endif // LARG4_ISCALCULATION_H
