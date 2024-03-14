@@ -9,10 +9,16 @@
 
 class G4Step;
 
+namespace geo
+{
+  class GeometryCore;
+}
+
 namespace larg4 {
 
   class ISCalculation {
   public:
+    ISCalculation();
     virtual ~ISCalculation() = default;
 
     virtual void Reset() = 0;
@@ -33,6 +39,7 @@ namespace larg4 {
     double fNumIonElectrons;         ///< number of ionization electrons for this step
     double fNumScintPhotons;         ///< number of scintillation photons for this step
     double fVisibleEnergyDeposition; ///Scalling factor for energy to photons
+    const  geo::GeometryCore* fGeo;   ///< Geometry provider needed to get space charge correction
   };
 }
 #endif // LARG4_ISCALCULATION_H
