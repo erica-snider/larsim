@@ -22,7 +22,7 @@ namespace larg4 {
   class ISTPC {
   public:
     explicit ISTPC(geo::GeometryCore const& geom);
-    bool isScintInActiveVolume(geo::Point_t const& ScintPoint);
+    bool isScintInActiveVolume(geo::Point_t const& ScintPoint) const;
     static std::vector<geo::BoxBoundedGeo> extractActiveLArVolume(geo::GeometryCore const& geom);
 
   private:

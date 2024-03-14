@@ -33,7 +33,7 @@ namespace larg4 {
 
   //----------------------------------------------------------------------------
 
-  bool ISTPC::isScintInActiveVolume(geo::Point_t const& ScintPoint)
+  bool ISTPC::isScintInActiveVolume(geo::Point_t const& ScintPoint) const
   {
     for (auto const& box : fActiveVolumes) {
       if (box.ContainsPosition(ScintPoint)) { return true; }
@@ -42,7 +42,7 @@ namespace larg4 {
   }
   //----------------------------------------------------------------------------
 
-  std::vector<geo::BoxBoundedGeo> ISTPC::extractActiveLArVolume(geo::GeometryCore const& geom)
+  std::vector<geo::BoxBoundedGeo> ISTPC::extractActiveLArVolume(geo::GeometryCore const& geom) 
   {
     std::vector<geo::BoxBoundedGeo> activeVolumes;
     activeVolumes.reserve(geom.Ncryostats());
