@@ -22,6 +22,7 @@
 // LArSoft includes
 
 #include "larcore/CoreUtils/ServiceUtil.h"
+#include "larcore/Geometry/Geometry.h"
 #include "lardata/DetectorInfoServices/DetectorPropertiesService.h"
 #include "lardataobj/Simulation/SimEnergyDeposit.h"
 #include "larevt/SpaceChargeServices/SpaceChargeService.h"
@@ -80,6 +81,7 @@ namespace larg4 {
     string Instances;
     std::vector<string> instanceNames;
     bool fSavePriorSCE;
+    const geo::GeometryCore* fGeo;
   };
 
   //......................................................................
@@ -95,6 +97,7 @@ namespace larg4 {
         "SeedISCalcAlg"))
     , Instances{pset.get<string>("Instances", "LArG4DetectorServicevolTPCActive")}
     , fSavePriorSCE{pset.get<bool>("SavePriorSCE", false)}
+    , fGeo(lar::providerFrom<geo::Geometry>())
   {
     std::cout << "IonAndScint Module Construct" << std::endl;
 
@@ -208,7 +211,8 @@ namespace larg4 {
                 << ", instance name: " << edeps.provenance()->productInstanceName() << std::endl;
 
       for (sim::SimEnergyDeposit const& edepi : *edeps) {
-        auto const isCalcData = fISAlg->CalcIonAndScint(detProp, edepi);
+        geo::TPCID tpcid = fGeo->FindTPCAtPosition(edepi.Start());
+        auto const isCalcData = fISAlg->CalcIonAndScint(detProp, edepi, tpcid);
 
         int ph_num = round(isCalcData.numPhotons);
         int ion_num = round(isCalcData.numElectrons);
@@ -226,12 +230,14 @@ namespace larg4 {
           auto posOffsetsStart =
             sce->GetPosOffsets({edepi.StartX(), edepi.StartY(), edepi.StartZ()});
           auto posOffsetsEnd = sce->GetPosOffsets({edepi.EndX(), edepi.EndY(), edepi.EndZ()});
+          
+          // Measured pos = true position + space charge offset
           startPos_tmp =
-            geo::Point_t{(float)(edepi.StartX() - posOffsetsStart.X()), //x should be subtracted
+            geo::Point_t{(float)(edepi.StartX() + posOffsetsStart.X()), //x should be subtracted
                          (float)(edepi.StartY() + posOffsetsStart.Y()),
                          (float)(edepi.StartZ() + posOffsetsStart.Z())};
           endPos_tmp =
-            geo::Point_t{(float)(edepi.EndX() - posOffsetsEnd.X()), //x should be subtracted
+            geo::Point_t{(float)(edepi.EndX() + posOffsetsEnd.X()), //x should be subtracted
                          (float)(edepi.EndY() + posOffsetsEnd.Y()),
                          (float)(edepi.EndZ() + posOffsetsEnd.Z())};
         }
