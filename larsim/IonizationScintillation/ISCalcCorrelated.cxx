@@ -33,6 +33,7 @@ namespace larg4 {
   //----------------------------------------------------------------------------
   ISCalcCorrelated::ISCalcCorrelated(detinfo::DetectorPropertiesData const& detProp,
                                      CLHEP::HepRandomEngine& Engine)
+    // these services should not be created like this in algorithm code...
     : fISTPC{*(lar::providerFrom<geo::Geometry>())}
     , fSCE(lar::providerFrom<spacecharge::SpaceChargeService>())
     , fBinomialGen{CLHEP::RandBinomial(Engine)}
@@ -76,7 +77,8 @@ namespace larg4 {
 
   //----------------------------------------------------------------------------
   ISCalcData ISCalcCorrelated::CalcIonAndScint(detinfo::DetectorPropertiesData const& detProp,
-                                               sim::SimEnergyDeposit const& edep)
+                                               sim::SimEnergyDeposit const& edep,
+                                               geo::TPCID const & tpcid)
   {
 
     double const energy_deposit = edep.Energy();
@@ -89,7 +91,9 @@ namespace larg4 {
     double ds = edep.StepLength();
     double dEdx = (ds <= 0.0) ? 0.0 : energy_deposit / ds;
     dEdx = (dEdx < 1.) ? 1. : dEdx;
-    double EFieldStep = EFieldAtStep(detProp.Efield(), edep);
+    auto EfieldVec = EfieldVecAtPoint(detProp.Efield(), detProp.NomEfieldDir(tpcid), edep.MidPoint(), tpcid);
+
+    double EFieldStep = EfieldVec.R(); // EFieldAtStep(detProp.Efield(), detProp.NomEfieldDir(tpcid), edep, tpcid);
     double recomb = 0., num_electrons = 0.;
 
     //calculate recombination survival fraction value inside, otherwise zero
@@ -102,7 +106,11 @@ namespace larg4 {
       }
       else if (fUseEllipsModBoxRecomb) {
 
-        double phi = AngleToEFieldAtStep(detProp.Efield(), edep);
+        // Calculate angle between step and actual E-field
+        // double phi = AngleToEFieldAtStep(detProp.Efield(), edep);
+        geo::Vector_t stepVec = edep.End() - edep.Start();
+        double phi = std::acos(stepVec.Dot(EfieldVec)/ (stepVec.R() * EfieldVec.R()));
+        if (phi > TMath::PiOver2()) { phi = abs(TMath::Pi() - phi); }
 
         if (std::isnan(phi)) {
           double Xi = fModBoxB * dEdx / EFieldStep;
@@ -160,57 +168,84 @@ namespace larg4 {
     return {energy_deposit, num_electrons, num_photons, GetScintYieldRatio(edep)};
   }
 
+/* ********
   //----------------------------------------------------------------------------
-  double ISCalcCorrelated::EFieldAtStep(double efield, sim::SimEnergyDeposit const& edep)
+  double ISCalcCorrelated::EFieldAtStep(double nomEfield, geo::Vector_t const& nomEfieldDir,
+                                        sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid)
   {
+    if (!bool(tpcid)) return 0.;
+
     // electric field outside active volume set to zero
     if (!fISTPC.isScintInActiveVolume(edep.MidPoint())) return 0.;
 
-    TVector3 elecvec;
+    // art::ServiceHandle<geo::Geometry const> fGeometry;
+    // geo::TPCID tpcid = fGeometry->PositionToTPCID(edep.MidPoint());
+    // const geo::TPCGeo& tpcGeo = fGeometry->TPC(tpcid);
 
-    art::ServiceHandle<geo::Geometry const> fGeometry;
-    geo::TPCID tpcid = fGeometry->PositionToTPCID(edep.MidPoint());
-    if (!bool(tpcid)) return 0.;
-    const geo::TPCGeo& tpcGeo = fGeometry->TPC(tpcid);
-
-    if (tpcGeo.DetectDriftDirection() == 1) elecvec.SetXYZ(1, 0, 0);
-    if (tpcGeo.DetectDriftDirection() == -1) elecvec.SetXYZ(-1, 0, 0);
-    if (tpcGeo.DetectDriftDirection() == 2) elecvec.SetXYZ(0, 1, 0);
-    if (tpcGeo.DetectDriftDirection() == -2) elecvec.SetXYZ(0, -1, 0);
-    if (tpcGeo.DetectDriftDirection() == 3) elecvec.SetXYZ(0, 0, 1);
-    if (tpcGeo.DetectDriftDirection() == -3) elecvec.SetXYZ(0, 0, -1);
-
-    elecvec *= efield;
+    // if (tpcGeo.DetectDriftDirection() == 1) elecvec.SetXYZ(1, 0, 0);
+    // if (tpcGeo.DetectDriftDirection() == -1) elecvec.SetXYZ(-1, 0, 0);
+    // if (tpcGeo.DetectDriftDirection() == 2) elecvec.SetXYZ(0, 1, 0);
+    // if (tpcGeo.DetectDriftDirection() == -2) elecvec.SetXYZ(0, -1, 0);
+    // if (tpcGeo.DetectDriftDirection() == 3) elecvec.SetXYZ(0, 0, 1);
+    // if (tpcGeo.DetectDriftDirection() == -3) elecvec.SetXYZ(0, 0, -1);
 
     if (fSCE->EnableSimEfieldSCE()) {
-      auto const eFieldOffsets = fSCE->GetEfieldOffsets(edep.MidPoint());
-      TVector3 scevec;
+      auto const eFieldOffsets = fSCE->GetEfieldOffsets(edep.MidPoint(), tpcid);
+      
+      TVector3 elecvec = efield * (nomEfieldDir + eFieldOffsets);
+      // scevec = efield * eFieldOffsets;
 
-      if (tpcGeo.DetectDriftDirection() == 1)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == -1)
-        scevec.SetXYZ(
-          -1 * efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == 2)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == -2)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), -1 * efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == 3)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == -3)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), -1 * efield * eFieldOffsets.Z());
+      // Commented lines below are the old way...
+      // Convention is Efield = nom Efield + mag nom Efield * SCE offsets
+      // if (tpcGeo.DetectDriftDirection() == 1)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == -1)
+      //   scevec.SetXYZ(
+      //     -1 * efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == 2)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == -2)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), -1 * efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == 3)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == -3)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), -1 * efield * eFieldOffsets.Z());
 
-      elecvec += scevec;
+      // elecvec += scevec;
+      return elecvec.Mag();
+
+    } else {
+      return nomEfield;
     }
 
-    return elecvec.Mag();
+    // return elecvec.Mag();
   }
+  ***************** */
+
+
   //----------------------------------------------------------------------------
+  geo::Vector_t ISCalcCorrelated::EfieldVecAtPoint(double nomEfield, geo::Vector_t const& nomEfieldDir,
+                                                geo::Point_t const& point, geo::TPCID const & tpcid) const 
+  {
+    if (!bool(tpcid) || !fISTPC.isScintInActiveVolume(point)) return {0,0,0};
+    
+    if (fSCE->EnableSimEfieldSCE()) {
+      auto const eFieldOffsets = fSCE->GetEfieldOffsets(point, tpcid);
+
+      // The correction returns the scale of the Efield correction
+      // so CorrecteEfield = NomField + NomFieldMat * Offset
+      return nomEfield * (nomEfieldDir + eFieldOffsets);
+    } else {
+      return nomEfield * nomEfieldDir;
+    }
+  } 
+  
+  /*/----------------------------------------------------------------------------
   double ISCalcCorrelated::AngleToEFieldAtStep(double efield, sim::SimEnergyDeposit const& edep)
   {
 
@@ -234,34 +269,39 @@ namespace larg4 {
     if (tpcGeo.DetectDriftDirection() == 3) elecvec.SetXYZ(0, 0, 1);
     if (tpcGeo.DetectDriftDirection() == -3) elecvec.SetXYZ(0, 0, -1);
 
+    // NOTE:  since the sign of D
     elecvec *= efield;
 
     // electric field inside active volume
     if (fSCE->EnableSimEfieldSCE()) {
-      auto const eFieldOffsets = fSCE->GetEfieldOffsets(edep.MidPoint());
+      auto const eFieldOffsets = fSCE->GetEfieldOffsets(edep.MidPoint(), tpcid);
 
-      TVector3 scevec;
+      // Convention is Efield = Nom field + mag of nom field * SCE offsets
+      elecvec += efield * eFieldOffsets;
 
-      if (tpcGeo.DetectDriftDirection() == 1)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == -1)
-        scevec.SetXYZ(
-          -1 * efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == 2)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == -2)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), -1 * efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == 3)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
-      if (tpcGeo.DetectDriftDirection() == -3)
-        scevec.SetXYZ(
-          efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), -1 * efield * eFieldOffsets.Z());
-
-      elecvec += scevec;
+      // Commented lines below are the old way of doing this...
+      // TVector3 scevec;
+      //
+      // if (tpcGeo.DetectDriftDirection() == 1)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == -1)
+      //   scevec.SetXYZ(
+      //     -1 * efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == 2)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == -2)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), -1 * efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == 3)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
+      // if (tpcGeo.DetectDriftDirection() == -3)
+      //   scevec.SetXYZ(
+      //     efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), -1 * efield * eFieldOffsets.Z());
+      //
+      // elecvec += scevec;
     }
 
     double angle = std::acos(stepvec.Dot(elecvec) / (stepvec.Mag() * elecvec.Mag()));
@@ -270,7 +310,8 @@ namespace larg4 {
 
     return angle;
   }
-
+  *********************/
+ 
   //----------------------------------------------------------------------------
   // LArQL chi0 function = fraction of escaping electrons
   double ISCalcCorrelated::EscapingEFraction(double const dEdx) const

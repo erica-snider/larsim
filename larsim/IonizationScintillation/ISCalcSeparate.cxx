@@ -46,14 +46,15 @@ namespace larg4 {
   //----------------------------------------------------------------------------
   // fNumIonElectrons returns a value that is not corrected for life time effects
   double ISCalcSeparate::CalcIon(detinfo::DetectorPropertiesData const& detProp,
-                                 sim::SimEnergyDeposit const& edep)
+                                 sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid)
   {
     float e = edep.Energy();
     float ds = edep.StepLength();
 
     double recomb = 0.;
     double dEdx = (ds <= 0.0) ? 0.0 : e / ds;
-    double EFieldStep = EFieldAtStep(detProp.Efield(), edep);
+    double EFieldStep = EfieldVecAtPoint(detProp.Efield(), detProp.NomEfieldDir(tpcid), edep.MidPoint(), tpcid).R();
+           //EFieldAtStep(detProp.Efield(), edep);
 
     // Guard against spurious values of dE/dx. Note: assumes density of LAr
     if (dEdx < 1.) { dEdx = 1.; }
@@ -91,13 +92,13 @@ namespace larg4 {
 
   //----------------------------------------------------------------------------
   ISCalcData ISCalcSeparate::CalcIonAndScint(detinfo::DetectorPropertiesData const& detProp,
-                                             sim::SimEnergyDeposit const& edep)
+                                             sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid)
   {
-    auto const numElectrons = CalcIon(detProp, edep);
+    auto const numElectrons = CalcIon(detProp, edep, tpcid);
     auto const [numPhotons, scintYieldRatio] = CalcScint(edep);
     return {edep.Energy(), numElectrons, numPhotons, scintYieldRatio};
   }
-  //----------------------------------------------------------------------------
+  /*/----------------------------------------------------------------------------
   double ISCalcSeparate::EFieldAtStep(double efield, sim::SimEnergyDeposit const& edep)
   {
     if (not fSCE->EnableSimEfieldSCE()) { return efield; }
@@ -106,5 +107,15 @@ namespace larg4 {
     return std::hypot(
       efield + efield * eFieldOffsets.X(), efield * eFieldOffsets.Y(), efield * eFieldOffsets.Z());
   }
-
+  *********/
+  geo::Vector_t ISCalcSeparate::EfieldVecAtPoint(double nomEfield, geo::Vector_t const& nomEfieldDir, 
+                                                 geo::Point_t const& point, geo::TPCID const& tpcid) const
+  {
+    if (fSCE->EnableSimEfieldSCE()) {
+      auto const eFieldOffsets = fSCE->GetEfieldOffsets(point, tpcid);
+      return nomEfield * (nomEfieldDir + eFieldOffsets);
+    } else {
+      return nomEfield * nomEfieldDir;
+    }
+  }
 } // namespace

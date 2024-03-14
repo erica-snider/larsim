@@ -8,6 +8,7 @@
 
 #include "larsim/IonizationScintillation/ISCalcNESTLAr.h"
 #include "larcore/CoreUtils/ServiceUtil.h"
+#include "larcore/Geometry/Geometry.h"
 #include "lardata/DetectorInfoServices/LArPropertiesService.h"
 #include "lardataalg/DetectorInfo/DetectorPropertiesData.h"
 #include "lardataobj/Simulation/SimEnergyDeposit.h"
@@ -31,14 +32,15 @@ namespace larg4 {
 
   //----------------------------------------------------------------------------
   ISCalcNESTLAr::ISCalcNESTLAr(CLHEP::HepRandomEngine& Engine)
-    : fEngine(Engine), fSCE{lar::providerFrom<spacecharge::SpaceChargeService>()}
+    : fEngine(Engine), fSCE{lar::providerFrom<spacecharge::SpaceChargeService>()},
+      fGeo(lar::providerFrom<geo::Geometry>())
   {
     std::cout << "ISCalcNESTLAr Initialize." << std::endl;
   }
 
   //----------------------------------------------------------------------------
   ISCalcData ISCalcNESTLAr::CalcIonAndScint(detinfo::DetectorPropertiesData const& detProp,
-                                            sim::SimEnergyDeposit const& edep)
+                                            sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid)
   {
     CLHEP::RandGauss GaussGen(fEngine);
     CLHEP::RandFlat UniformGen(fEngine);
@@ -64,7 +66,8 @@ namespace larg4 {
 
     double DokeBirks[3];
 
-    double eField = EFieldAtStep(detProp.Efield(), edep);
+    // double eField = EFieldAtStep(detProp.Efield(), edep);
+    double eField = EfieldVecAtPoint(detProp.Efield(), detProp.NomEfieldDir(tpcid), edep.MidPoint(), tpcid).R();
     if (eField) {
       DokeBirks[0] = 0.07 * pow((eField / 1.0e3), -0.85);
       DokeBirks[2] = 0.00;
@@ -214,20 +217,33 @@ namespace larg4 {
     return LET;
   }
 
-  //----------------------------------------------------------------------------
+  /*/----------------------------------------------------------------------------
   double ISCalcNESTLAr::EFieldAtStep(double efield, sim::SimEnergyDeposit const& edep)
   {
     geo::Point_t pos = edep.MidPoint();
     double EField = efield;
     geo::Vector_t eFieldOffsets;
     if (fSCE->EnableSimEfieldSCE()) {
-      eFieldOffsets = fSCE->GetEfieldOffsets(pos);
-      EField =
+      geo::TPCID tpcid = fGeo->PositionToTPCID(pos);
+      eFieldOffsets = fSCE->GetEfieldOffsets(pos,tpcid);
+      EField = efield * (f)
         std::sqrt((efield + efield * eFieldOffsets.X()) * (efield + efield * eFieldOffsets.X()) +
                   (efield * eFieldOffsets.Y() * efield * eFieldOffsets.Y()) +
                   (efield * eFieldOffsets.Z() * efield * eFieldOffsets.Z()));
     }
     return EField;
+  }
+  *************/
+ 
+  geo::Vector_t ISCalcNESTLAr::EfieldVecAtPoint(double nomEfield, geo::Vector_t const& nomEfieldDir,
+                                                geo::Point_t const& point, geo::TPCID const& tpcid) const
+  { 
+    if (fSCE->EnableSimEfieldSCE()) {
+      geo::Vector_t eFieldOffsets = fSCE->GetEfieldOffsets(point, tpcid);
+      return nomEfield * (nomEfieldDir + eFieldOffsets);
+    } else {
+      return nomEfield * nomEfieldDir;
+    }
   }
 
 }

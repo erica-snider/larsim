@@ -27,11 +27,14 @@ namespace larg4 {
     ISCalcSeparate();
     void Reset();
 
-    double EFieldAtStep(double efield,
-                        sim::SimEnergyDeposit const& edep)
-      override; //value of field with any corrections for this step
+    // double EFieldAtStep(double efield,
+    //                     sim::SimEnergyDeposit const& edep)
+    //   override; //value of field with any corrections for this step
+
+    geo::Vector_t EfieldVecAtPoint(double nomEfield, geo::Vector_t const& nomEfieldDir,
+                                geo::Point_t const& point, geo::TPCID const& tpcid) const override;
     ISCalcData CalcIonAndScint(detinfo::DetectorPropertiesData const& detProp,
-                               sim::SimEnergyDeposit const& edep) override;
+                               sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid) override;
 
   private:
     double fGeVToElectrons; ///< from LArG4Parameters service
@@ -44,7 +47,7 @@ namespace larg4 {
     const spacecharge::SpaceCharge* fSCE;
 
     double CalcIon(detinfo::DetectorPropertiesData const& detProp,
-                   sim::SimEnergyDeposit const& edep);
+                   sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid);
     std::pair<double, double> CalcScint(sim::SimEnergyDeposit const& edep);
   };
 

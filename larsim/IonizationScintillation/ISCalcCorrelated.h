@@ -35,12 +35,20 @@ namespace larg4 {
     ISCalcCorrelated(detinfo::DetectorPropertiesData const& detProp,
                      CLHEP::HepRandomEngine& Engine);
 
-    double EFieldAtStep(double efield,
-                        sim::SimEnergyDeposit const& edep)
-      override; //value of field with any corrections for this step
-    double AngleToEFieldAtStep(double efield, sim::SimEnergyDeposit const& edep);
+    // double EFieldAtStep(double efield,
+    //                     sim::SimEnergyDeposit const& edep)
+    //   override; //value of field with any corrections for this step
+    
+    // Efield with SCE corrections (if enabled) at specified point. TPC id must be known
+    // Passing invalid TPC id returns zero vector
+    // virtual double EfieldAtStep( double nomEfield, geo::Vector_t const& nomEfieldDir, 
+    //                              sim::SimEnergyDeposit const& edep, geo::TPCID const& tpcid) const override;
+    virtual geo::Vector_t EfieldVecAtPoint(double nomEfield, geo::Vector_t const& nomEfieldDir,
+                                geo::Point_t const& point, geo::TPCID const & tpcid) const override;
+    // double AngleToEFieldAtStep(double efield, sim::SimEnergyDeposit const& edep);
     ISCalcData CalcIonAndScint(detinfo::DetectorPropertiesData const& detProp,
-                               sim::SimEnergyDeposit const& edep) override;
+                               sim::SimEnergyDeposit const& edep,
+                               geo::TPCID const& tpcid) override;
 
   private:
     ISTPC fISTPC;
