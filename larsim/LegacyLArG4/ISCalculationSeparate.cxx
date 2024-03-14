@@ -24,7 +24,9 @@ namespace larg4 {
 
   //----------------------------------------------------------------------------
   ISCalculationSeparate::ISCalculationSeparate()
-  {
+  : ISCalculation::ISCalculation()
+  {  
+
     art::ServiceHandle<sim::LArG4Parameters const> lgpHandle;
     const detinfo::LArProperties* larp = lar::providerFrom<detinfo::LArPropertiesService>();
     auto const detProp =

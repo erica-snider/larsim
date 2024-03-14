@@ -37,6 +37,7 @@ namespace larg4 {
 
   //----------------------------------------------------------------------------
   ISCalculationCorrelated::ISCalculationCorrelated(detinfo::DetectorPropertiesData const& detProp)
+    : ISCalculation::ISCalculation()
   {
     std::cout << "LegacyLArG4/ISCalculationCorrelated Initialize." << std::endl;
     art::ServiceHandle<sim::LArG4Parameters const> lgpHandle;

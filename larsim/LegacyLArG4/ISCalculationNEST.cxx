@@ -17,7 +17,8 @@ namespace larg4 {
 
   //----------------------------------------------------------------------------
   ISCalculationNEST::ISCalculationNEST(CLHEP::HepRandomEngine& engine)
-    : // \todo should ideally make the yield factor passed to the NestAlg ctor a parameter
+    : ISCalculation::ISCalculation(),
+    // \todo should ideally make the yield factor passed to the NestAlg ctor a parameter
     fNest(1., engine)
   {
     // Set the step size to small value if NEST is chosen, per Matthew Szydagis,
