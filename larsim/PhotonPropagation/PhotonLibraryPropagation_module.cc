@@ -4,6 +4,8 @@
  */
 
 #include "larcore/CoreUtils/ServiceUtil.h"
+#include "larcore/Geometry/Geometry.h"
+#include "larcoreobj/SimpleTypesAndConstants/geo_types.h"
 #include "lardata/DetectorInfoServices/DetectorPropertiesService.h"
 #include "lardata/DetectorInfoServices/LArPropertiesService.h"
 #include "lardataobj/Simulation/SimEnergyDeposit.h"
@@ -188,6 +190,7 @@ namespace phot {
     art::ServiceHandle<sim::LArG4Parameters const> lgp;
     auto const* larp = lar::providerFrom<detinfo::LArPropertiesService>();
     auto const detProp = art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(e);
+    auto const geo = lar::providerFrom<geo::Geometry>();
     CLHEP::RandPoissonQ randpoisphot{fPhotonEngine};
     CLHEP::RandFlat randflatscinttime{fScintTimeEngine};
     auto const nOpChannels = pvs->NOpChannels();
@@ -217,7 +220,8 @@ namespace phot {
                "Position: "
             << edep.MidPoint();
         }
-        auto const isCalcData = fISAlg.CalcIonAndScint(detProp, edep);
+        geo::TPCID tpcid = geo->PositionToTPCID(edep.MidPoint());
+        auto const isCalcData = fISAlg.CalcIonAndScint(detProp, edep, tpcid);
         //total amount of scintillation photons
         double nphot = static_cast<int>(isCalcData.numPhotons);
         //amount of scintillated photons created via the fast scintillation process
