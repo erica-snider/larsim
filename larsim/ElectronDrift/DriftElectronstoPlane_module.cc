@@ -225,6 +225,7 @@ namespace detsim {
 
     auto const detProp =
       art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(event);
+    auto const* SCE = lar::providerFrom<spacecharge::SpaceChargeService>();
     // For each energy deposit in this event
     for (size_t edIndex = 0; edIndex < energyDepositsSize; ++edIndex) {
       auto const& energyDeposit = energyDeposits[edIndex];
@@ -238,7 +239,10 @@ namespace detsim {
       // From the position in world coordinates, determine the
       // cryostat and tpc. If somehow the step is outside a tpc
       // (e.g., cosmic rays in rock) just move on to the next one.
-      const geo::TPCGeo& tpcGeo = fGeometry->TPC();
+      const geo::TPCGeo* tpcGeoP = fGeometry->PositionToTPCptr(mp);
+      if (tpcGeoP == nullptr) continue;
+
+      const geo::TPCGeo& tpcGeo = *tpcGeoP;   // dereference for convenience of pre-existing code
 
       // The drift direction can be either in the positive
       // or negative direction in any coordinate x, y or z.
@@ -285,16 +289,16 @@ namespace detsim {
 
       /// \todo think about effects of drift between planes.
       // Center of plane is also returned in cm units
-      double DriftDistance = std::abs(xyz[driftcoordinate] - plane_center_coord);
+      double DriftDistSigned = xyz[driftcoordinate] - plane_center_coord;
+      double DriftDistance = std::abs(DriftDistSigned);
 
       // Space-charge effect (SCE): Get SCE {x,y,z} offsets for
       // particular location in TPC
       geo::Vector_t posOffsets{0.0, 0.0, 0.0};
       double posOffsetxyz[3] = {
         0.0, 0.0, 0.0}; //need this array for the driftcoordinate and transversecoordinates
-      auto const* SCE = lar::providerFrom<spacecharge::SpaceChargeService>();
       if (SCE->EnableSimSpatialSCE() == true) {
-        posOffsets = SCE->GetPosOffsets(mp);
+        posOffsets = SCE->GetPosOffsets(mp,tpcGeo.ID());
         if (larsim::Utils::SCE::out_of_bounds(posOffsets)) continue;
         posOffsetxyz[0] = posOffsets.X();
         posOffsetxyz[1] = posOffsets.Y();
@@ -304,7 +308,10 @@ namespace detsim {
       double avegagetransversePos1 = 0.;
       double avegagetransversePos2 = 0.;
 
-      DriftDistance += -1. * posOffsetxyz[driftcoordinate];
+      // Measured pos = true position + SCE offset
+      // DriftDistance += -1. * posOffsetxyz[driftcoordinate];
+      DriftDistSigned += posOffsetxyz[driftcoordinate];
+      DriftDistance = std::abs(DriftDistSigned);
       avegagetransversePos1 = xyz[transversecoordinate1] + posOffsetxyz[transversecoordinate1];
       avegagetransversePos2 = xyz[transversecoordinate2] + posOffsetxyz[transversecoordinate2];
 
@@ -312,7 +319,12 @@ namespace detsim {
       // plane (see issue #15131). Given that we don't have any subtlety in the
       // simulation of this region, bringing the deposit exactly on the plane
       // should be enough for the time being.
-      if (DriftDistance < 0.) DriftDistance = 0.;
+      if ((driftsign == 1 && plane_center_coord < DriftDistSigned)
+          ||
+          (driftsign == -1 && plane_center_coord > DriftDistSigned)) {
+        DriftDistance = 0.;
+      };
+      //if (DriftDistance < 0.) DriftDistance = 0.;
 
       // Drift time in ns
       double TDrift = DriftDistance * fRecipDriftVel[0];
@@ -325,7 +337,7 @@ namespace detsim {
                   tpcGeo.PlanePitch(0, 1) * fRecipDriftVel[1]);
       }
       const int nIonizedElectrons =
-        fISAlg.CalculateIonizationAndScintillation(detProp, energyDeposit).numElectrons;
+        fISAlg.CalculateIonizationAndScintillation(detProp, energyDeposit, tpcGeo.ID()).numElectrons;
 
       const double lifetimecorrection = TMath::Exp(TDrift / fLifetimeCorr_const);
       const double energy = energyDeposit.Energy();

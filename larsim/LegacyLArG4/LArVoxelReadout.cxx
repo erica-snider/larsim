@@ -371,7 +371,8 @@ namespace larg4 {
     // Already know which TPC we're in because we have been told
 
     try {
-      const geo::TPCGeo& tpcg = fGeoHandle->TPC(geo::TPCID{cryostat, tpc});
+      geo::TPCID tpcid{cryostat, tpc};
+      const geo::TPCGeo& tpcg = fGeoHandle->TPC(tpcid);
 
       // X drift distance - the drift direction can be either in
       // the positive or negative direction, so use std::abs
@@ -391,10 +392,10 @@ namespace larg4 {
       geo::Vector_t posOffsets;
       auto const* SCE = lar::providerFrom<spacecharge::SpaceChargeService>();
       if (SCE->EnableSimSpatialSCE() == true) {
-        posOffsets = SCE->GetPosOffsets({xyz[0], xyz[1], xyz[2]});
+        posOffsets = SCE->GetPosOffsets({xyz[0], xyz[1], xyz[2]}, tpcid);
         if (larsim::Utils::SCE::out_of_bounds(posOffsets)) { return; }
       }
-      posOffsets.SetX(-posOffsets.X());
+      // posOffsets.SetX(-posOffsets.X());
 
       // Drift time (nano-sec)
       double TDrift;

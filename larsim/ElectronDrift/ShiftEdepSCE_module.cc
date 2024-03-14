@@ -21,6 +21,7 @@
 #include "TNtuple.h"
 
 #include "larcore/CoreUtils/ServiceUtil.h"
+#include "larcore/Geometry/Geometry.h"
 #include "lardata/DetectorInfoServices/DetectorPropertiesService.h"
 #include "lardata/DetectorInfoServices/LArPropertiesService.h"
 #include "lardataobj/Simulation/SimEnergyDeposit.h"
@@ -90,27 +91,38 @@ void spacecharge::ShiftEdepSCE::produce(art::Event& e)
 
   geo::Vector_t posOffsetsStart{0.0, 0.0, 0.0};
   geo::Vector_t posOffsetsEnd{0.0, 0.0, 0.0};
+  auto const* geo = lar::providerFrom<geo::Geometry>();
+  const geo::TPCGeo* tpcGeoPtr{nullptr};
+  if (!inEdepVec.empty()) {
+    tpcGeoPtr = geo->PositionToTPCptr(inEdepVec.front().Start());
+  }
   for (auto const& edep : inEdepVec) {
-    if (sce->EnableSimSpatialSCE()) {
-      posOffsetsStart = sce->GetPosOffsets({edep.StartX(), edep.StartY(), edep.StartZ()});
-      posOffsetsEnd = sce->GetPosOffsets({edep.EndX(), edep.EndY(), edep.EndZ()});
+    // Find the TPC we're in. Will need that in several spots
+    if (!tpcGeoPtr->ContainsPosition(edep.Start())) {
+        tpcGeoPtr = geo->PositionToTPCptr(edep.Start());
+    }
+    geo::TPCID tpcid = tpcGeoPtr->ID();
+
+    if (sce->EnableSimSpatialSCE()) {  
+      posOffsetsStart = sce->GetPosOffsets(edep.Start(), tpcid);
+      posOffsetsEnd = sce->GetPosOffsets(edep.End(), tpcid);
+      
+      // Check for crazy value of correction
       if (larsim::Utils::SCE::out_of_bounds(posOffsetsStart) ||
           larsim::Utils::SCE::out_of_bounds(posOffsetsEnd)) {
         continue;
       }
     }
-    auto const isData = fISAlg.CalcIonAndScint(detProp, edep);
+    auto const isData = fISAlg.CalcIonAndScint(detProp, edep, tpcid);
     outEdepVec.emplace_back(
       isData.numPhotons,
       isData.numElectrons,
       0.0,
       edep.Energy(),
-      geo::Point_t{(float)(edep.StartX() - posOffsetsStart.X()), //x should be subtracted
-                   (float)(edep.StartY() + posOffsetsStart.Y()),
-                   (float)(edep.StartZ() + posOffsetsStart.Z())},
-      geo::Point_t{(float)(edep.EndX() - posOffsetsEnd.X()), //x should be subtracted
-                   (float)(edep.EndY() + posOffsetsEnd.Y()),
-                   (float)(edep.EndZ() + posOffsetsEnd.Z())},
+
+      // Apparent pos = true position + SCE offsets
+      geo::Point_t{edep.Start() + posOffsetsStart},
+      geo::Point_t{edep.End() + posOffsetsEnd},
       edep.StartT(),
       edep.EndT(),
       edep.TrackID(),
