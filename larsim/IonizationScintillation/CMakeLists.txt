@@ -36,6 +36,8 @@ cet_build_plugin(IonAndScint art::EDProducer
 
 cet_build_plugin(ISCalcAna art::EDAnalyzer
   LIBRARIES PRIVATE
+  larcorealg::Geometry
+  larcore::ServiceUtil
   larsim::Simulation_LArG4Parameters_service
   larevt::SpaceCharge
   larsim::IonizationScintillation

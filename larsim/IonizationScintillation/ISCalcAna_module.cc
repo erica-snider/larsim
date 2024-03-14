@@ -22,6 +22,10 @@
 #include "TNtuple.h"
 #include "art_root_io/TFileService.h"
 
+#include "larcore/Geometry/Geometry.h"
+#include "larcorealg/Geometry/GeometryCore.h"
+#include "larcore/CoreUtils/ServiceUtil.h"
+
 #include "larsim/IonizationScintillation/ISCalc.h"
 #include "larsim/IonizationScintillation/ISCalcCorrelated.h"
 #include "larsim/IonizationScintillation/ISCalcNESTLAr.h"
@@ -47,6 +51,7 @@ namespace larg4 {
     void endJob() override;
 
   private:
+    const geo::GeometryCore* fGeo;
     std::unique_ptr<ISCalc> fISAlg;
     art::InputTag fEDepTag;
     art::InputTag calcTag; // name of calculator to use, NEST or Separate
@@ -56,6 +61,7 @@ namespace larg4 {
 
   ISCalcAna::ISCalcAna(fhicl::ParameterSet const& pset)
     : EDAnalyzer(pset)
+    , fGeo(lar::providerFrom<geo::Geometry>())
     , fEDepTag{pset.get<art::InputTag>("SimulationLabel")}
     , calcTag{pset.get<art::InputTag>("ISCalcAlg")}
     , fEngine(art::ServiceHandle<rndm::NuRandomService>()->registerAndSeedEngine(
@@ -102,9 +108,12 @@ namespace larg4 {
 
     auto const detProp =
       art::ServiceHandle<detinfo::DetectorPropertiesService const>()->DataFor(event);
+    geo::TPCID tpcid{};
     for (auto const& edepi : *edep_handle) {
+      tpcid = fGeo->PositionToTPCID(edepi.Start());
+      
       auto const [energyDeposit, nElectrons, nPhotons, scintYieldRatio] =
-        fISAlg->CalcIonAndScint(detProp, edepi);
+        fISAlg->CalcIonAndScint(detProp, edepi, tpcid);
       fNtuple->Fill(event.run(),
                     event.event(),
                     edepi.T(),
